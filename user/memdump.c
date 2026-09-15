@@ -2,8 +2,75 @@
 #include "user/user.h"
 #include "kernel/fcntl.h"
 
-void memdump(char *fmt, char *data, int len);
+void print_hex64(uint64 val)
+{
+  char buf[17];
+  int i = 16;
+  buf[i] = '\0';
+  if (val == 0) {
+    printf("0\n");
+    return;
+  }
+  while (val > 0) {
+    int d = val % 16;
+    buf[--i] = (d < 10) ? ('0' + d) : ('a' + d - 10);
+    val /= 16;
+  }
+  printf("%s\n", buf + i);
+}
+void memdump(char *fmt, char *data, int len)
+{
+  int off = 0;
 
+  for (int i = 0; fmt[i] != '\0'; i++) {
+    char f = fmt[i];
+    int need = 0;
+
+    if (f == 'i') need = 4;
+    else if (f == 'p') need = 8;
+    else if (f == 'h') need = 2;
+    else if (f == 'c') need = 1;
+    else if (f == 's') need = 8;
+    else if (f == 'S') need = 0;  // handled separately, no fixed size
+
+    if (f != 'S' && off + need > len) {
+      printf("memdump: not enough data for '%c'\n", f);
+      return;
+    }
+
+    if (f == 'i') {
+      int val;
+      memmove(&val, data + off, 4);
+      printf("%d\n", val);
+      off += 4;
+    } else if (f == 'p') {
+      uint64 val;
+      memmove(&val, data + off, 8);
+      print_hex64(val);
+      off += 8;
+    } else if (f == 'h') {
+      unsigned short val;
+      memmove(&val, data + off, 2);
+      printf("%d\n", val);
+      off += 2;
+    } else if (f == 'c') {
+      printf("%c\n", data[off]);
+      off += 1;
+    } else if (f == 's') {
+      char *strptr;
+      memmove(&strptr, data + off, 8);
+      printf("%s\n", strptr);
+      off += 8;
+    } else if (f == 'S') {
+      int j = off;
+      while (j < len && data[j] != '\0')
+        j++;
+      write(1, data + off, j - off);
+      printf("\n");
+      off = len;
+    }
+  }
+}
 int
 main(int argc, char *argv[])
 {
@@ -55,11 +122,4 @@ main(int argc, char *argv[])
     exit(1);
   }
   exit(0);
-}
-
-void
-memdump(char *fmt, char *data, int len)
-{
-  // Your code here.  `data` holds `len` valid bytes.
-
 }
