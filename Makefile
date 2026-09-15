@@ -206,7 +206,7 @@ UPROGS=\
 	$U/_sleep\
 	$U/_sixfive\
 	$U/_find\
-
+	$U/_uptime
 ifeq ($(LAB),syscall)
 UPROGS += \
 	$U/_attack\
