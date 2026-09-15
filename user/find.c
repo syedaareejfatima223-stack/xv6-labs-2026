@@ -2,6 +2,7 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 #include "kernel/fs.h"
+#include "kernel/param.h"
 
 char*
 fmtname(char *path)
@@ -21,7 +22,32 @@ fmtname(char *path)
 }
 
 void
-find(char *path, char *name)
+run_exec(char **cmdargv, int cmdargc, char *matchpath)
+{
+  char *argv[MAXARG];
+  int i;
+
+  for (i = 0; i < cmdargc; i++)
+    argv[i] = cmdargv[i];
+  argv[i++] = matchpath;
+  argv[i] = 0;
+
+  int pid = fork();
+  if (pid < 0) {
+    fprintf(2, "find: fork failed\n");
+    return;
+  }
+  if (pid == 0) {
+    exec(argv[0], argv);
+    fprintf(2, "find: exec %s failed\n", argv[0]);
+    exit(1);
+  } else {
+    wait(0);
+  }
+}
+
+void
+find(char *path, char *name, char **cmdargv, int cmdargc)
 {
   char buf[512], *p;
   int fd;
@@ -42,7 +68,10 @@ find(char *path, char *name)
   switch (st.type) {
   case T_FILE:
     if (strcmp(fmtname(path), name) == 0) {
-      printf("%s\n", path);
+      if (cmdargc > 0)
+        run_exec(cmdargv, cmdargc, path);
+      else
+        printf("%s\n", path);
     }
     break;
 
@@ -70,11 +99,17 @@ find(char *path, char *name)
       }
 
       if (strcmp(de.name, name) == 0) {
-        printf("%s\n", buf);
+        if (cmdargc > 0) {
+          char matchpath[512];
+          strcpy(matchpath, buf);
+          run_exec(cmdargv, cmdargc, matchpath);
+        } else {
+          printf("%s\n", buf);
+        }
       }
 
       if (st.type == T_DIR) {
-        find(buf, name);
+        find(buf, name, cmdargv, cmdargc);
       }
     }
     break;
@@ -85,11 +120,24 @@ find(char *path, char *name)
 int
 main(int argc, char *argv[])
 {
-  if (argc != 3) {
-    fprintf(2, "Usage: find <path> <name>\n");
+  char *cmdargv[MAXARG];
+  int cmdargc = 0;
+
+  if (argc < 3) {
+    fprintf(2, "Usage: find <path> <name> [-exec cmd ...]\n");
     exit(1);
   }
 
-  find(argv[1], argv[2]);
+  if (argc > 3) {
+    if (strcmp(argv[3], "-exec") != 0) {
+      fprintf(2, "Usage: find <path> <name> [-exec cmd ...]\n");
+      exit(1);
+    }
+    for (int i = 4; i < argc; i++) {
+      cmdargv[cmdargc++] = argv[i];
+    }
+  }
+
+  find(argv[1], argv[2], cmdargv, cmdargc);
   exit(0);
 }
